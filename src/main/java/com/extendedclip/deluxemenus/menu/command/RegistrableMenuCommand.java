@@ -13,8 +13,6 @@ import org.bukkit.command.SimpleCommandMap;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
@@ -25,7 +23,7 @@ public class RegistrableMenuCommand extends Command {
 
     private static final String FALLBACK_PREFIX = "DeluxeMenus".toLowerCase(Locale.ROOT).trim();
     private static CommandMap commandMap = null;
-    private static boolean commandTreeSyncQueued = false;
+    private static boolean commandUpdateQueued = false;
 
     private final DeluxeMenus plugin;
 
@@ -95,17 +93,7 @@ public class RegistrableMenuCommand extends Command {
         registered = true;
 
         if (commandMap == null) {
-            try {
-                final Field f = Bukkit.getServer().getClass().getDeclaredField("commandMap");
-                f.setAccessible(true);
-                commandMap = (CommandMap) f.get(Bukkit.getServer());
-            } catch (final @NotNull Exception exception) {
-                plugin.printStacktrace(
-                        "Something went wrong while trying to register command: " + this.getName(),
-                        exception
-                );
-                return;
-            }
+            commandMap = Bukkit.getCommandMap();
         }
 
         boolean registered = commandMap.register(FALLBACK_PREFIX, this);
@@ -124,7 +112,7 @@ public class RegistrableMenuCommand extends Command {
             );
         }
 
-        this.requestCommandTreeSync();
+        this.requestPlayerCommandUpdate();
     }
 
     public void unregister() {
@@ -143,27 +131,22 @@ public class RegistrableMenuCommand extends Command {
             return;
         }
 
-        Field cMap;
-        Field knownCommands;
         try {
-            cMap = Bukkit.getServer().getClass().getDeclaredField("commandMap");
-            cMap.setAccessible(true);
-            knownCommands = SimpleCommandMap.class.getDeclaredField("knownCommands");
-            knownCommands.setAccessible(true);
+            if (commandMap instanceof SimpleCommandMap) {
+                final Map<String, Command> knownCommandsMap = ((SimpleCommandMap) commandMap).getKnownCommands();
 
-            final Map<String, Command> knownCommandsMap = (Map<String, Command>) knownCommands.get(cMap.get(Bukkit.getServer()));
+                // We need to remove every single alias because CommandMap#register() adds them all to the map.
+                // If we do not remove them, then we will have dangling references to the command.
+                knownCommandsMap.remove(this.getName());
+                knownCommandsMap.remove(FALLBACK_PREFIX + ":" + this.getName());
 
-            // We need to remove every single alias because CommandMap#register() adds them all to the map.
-            // If we do not remove them, then we will have dangling references to the command.
-            knownCommandsMap.remove(this.getName());
-            knownCommandsMap.remove(FALLBACK_PREFIX + ":" + this.getName());
-
-            for (String alias : this.getAliases()) {
-                knownCommandsMap.remove(alias);
-                knownCommandsMap.remove(FALLBACK_PREFIX + ":" + alias);
+                for (String alias : this.getAliases()) {
+                    knownCommandsMap.remove(alias);
+                    knownCommandsMap.remove(FALLBACK_PREFIX + ":" + alias);
+                }
             }
 
-            boolean unregistered = this.unregister((CommandMap) cMap.get(Bukkit.getServer()));
+            boolean unregistered = this.unregister(commandMap);
             this.unregister(commandMap);
             if (unregistered) {
                 plugin.debug(
@@ -178,7 +161,7 @@ public class RegistrableMenuCommand extends Command {
                         "Failed to unregister command: " + this.getName()
                 );
             }
-            this.requestCommandTreeSync();
+            this.requestPlayerCommandUpdate();
         } catch (final @NotNull Exception exception) {
             plugin.printStacktrace(
                     "Something went wrong while trying to unregister command: " + this.getName(),
@@ -193,34 +176,15 @@ public class RegistrableMenuCommand extends Command {
         return registered;
     }
 
-    private void requestCommandTreeSync() {
-        if (commandTreeSyncQueued) {
+    private void requestPlayerCommandUpdate() {
+        if (commandUpdateQueued) {
             return;
         }
 
-        commandTreeSyncQueued = true;
+        commandUpdateQueued = true;
         this.plugin.getScheduler().runTask(() -> {
-            commandTreeSyncQueued = false;
-            this.syncCommandTree();
+            commandUpdateQueued = false;
+            Bukkit.getOnlinePlayers().forEach(Player::updateCommands);
         });
-    }
-
-    private void syncCommandTree() {
-        try {
-            final Method syncCommands = Bukkit.getServer().getClass().getDeclaredMethod("syncCommands");
-            syncCommands.setAccessible(true);
-            syncCommands.invoke(Bukkit.getServer());
-        } catch (final NoSuchMethodException ignored) {
-            plugin.debug(
-                    DebugLevel.LOW,
-                    Level.INFO,
-                    "Server implementation does not expose command tree syncing."
-            );
-        } catch (final @NotNull Exception exception) {
-            plugin.printStacktrace(
-                    "Something went wrong while trying to sync the server command tree.",
-                    exception
-            );
-        }
     }
 }
