@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
@@ -24,6 +25,7 @@ public class RegistrableMenuCommand extends Command {
 
     private static final String FALLBACK_PREFIX = "DeluxeMenus".toLowerCase(Locale.ROOT).trim();
     private static CommandMap commandMap = null;
+    private static boolean commandTreeSyncQueued = false;
 
     private final DeluxeMenus plugin;
 
@@ -121,6 +123,8 @@ public class RegistrableMenuCommand extends Command {
                             + ". A command with that name already exists. Use /deluxemenus:" + this.getName() + " instead."
             );
         }
+
+        this.requestCommandTreeSync();
     }
 
     public void unregister() {
@@ -174,6 +178,7 @@ public class RegistrableMenuCommand extends Command {
                         "Failed to unregister command: " + this.getName()
                 );
             }
+            this.requestCommandTreeSync();
         } catch (final @NotNull Exception exception) {
             plugin.printStacktrace(
                     "Something went wrong while trying to unregister command: " + this.getName(),
@@ -186,5 +191,36 @@ public class RegistrableMenuCommand extends Command {
 
     public boolean registered() {
         return registered;
+    }
+
+    private void requestCommandTreeSync() {
+        if (commandTreeSyncQueued) {
+            return;
+        }
+
+        commandTreeSyncQueued = true;
+        this.plugin.getScheduler().runTask(() -> {
+            commandTreeSyncQueued = false;
+            this.syncCommandTree();
+        });
+    }
+
+    private void syncCommandTree() {
+        try {
+            final Method syncCommands = Bukkit.getServer().getClass().getDeclaredMethod("syncCommands");
+            syncCommands.setAccessible(true);
+            syncCommands.invoke(Bukkit.getServer());
+        } catch (final NoSuchMethodException ignored) {
+            plugin.debug(
+                    DebugLevel.LOW,
+                    Level.INFO,
+                    "Server implementation does not expose command tree syncing."
+            );
+        } catch (final @NotNull Exception exception) {
+            plugin.printStacktrace(
+                    "Something went wrong while trying to sync the server command tree.",
+                    exception
+            );
+        }
     }
 }
