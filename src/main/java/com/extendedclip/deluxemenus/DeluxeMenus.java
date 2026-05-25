@@ -10,6 +10,7 @@ import com.extendedclip.deluxemenus.hooks.*;
 import com.extendedclip.deluxemenus.listener.PlayerListener;
 import com.extendedclip.deluxemenus.menu.Menu;
 import com.extendedclip.deluxemenus.menu.MenuItem;
+import com.extendedclip.deluxemenus.menu.command.RegistrableMenuCommand;
 import com.extendedclip.deluxemenus.menu.options.HeadType;
 import com.extendedclip.deluxemenus.menu.options.MenuOptions;
 import com.extendedclip.deluxemenus.nbt.NbtProvider;
@@ -101,6 +102,7 @@ public class DeluxeMenus extends JavaPlugin {
 
         hookIntoVault();
         setUpItemHooks();
+        RegistrableMenuCommand.registerPaperLifecycle(this);
 
         this.menuConfig = new DeluxeMenusConfig(this);
         if (this.menuConfig.loadDefConfig()) {
