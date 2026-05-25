@@ -217,7 +217,15 @@ public final class VersionHelper {
      * @return The craft class.
      */
     public static Class<?> getCraftClass(@NotNull final String name) throws ClassNotFoundException {
-        return Class.forName("org.bukkit.craftbukkit." + NMS_VERSION + "." + name);
+        if ("craftbukkit".equals(NMS_VERSION)) {
+            return Class.forName("org.bukkit.craftbukkit." + name);
+        }
+
+        try {
+            return Class.forName("org.bukkit.craftbukkit." + NMS_VERSION + "." + name);
+        } catch (ClassNotFoundException ignored) {
+            return Class.forName("org.bukkit.craftbukkit." + name);
+        }
     }
 
 }

@@ -102,7 +102,6 @@ public class DeluxeMenus extends JavaPlugin {
 
         hookIntoVault();
         setUpItemHooks();
-        RegistrableMenuCommand.registerPaperLifecycle(this);
 
         this.menuConfig = new DeluxeMenusConfig(this);
         if (this.menuConfig.loadDefConfig()) {
@@ -110,6 +109,7 @@ public class DeluxeMenus extends JavaPlugin {
         } else {
             debug(DebugLevel.HIGHEST, Level.WARNING, "Failed to load from config.yml. Use /dm reload after fixing your errors.");
         }
+        RegistrableMenuCommand.registerPaperLifecycle(this);
 
         new PlayerListener(this).register();
         if (!new DeluxeMenusCommand(this).register()) {
