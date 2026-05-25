@@ -17,8 +17,12 @@ import org.bukkit.command.SimpleCommandMap;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
+import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -118,8 +122,40 @@ public class RegistrableMenuCommand extends Command implements BasicCommand {
     }
 
     @Override
+    public @NotNull Collection<String> suggest(final @NotNull CommandSourceStack commandSourceStack, final @NotNull String[] args) {
+        return this.tabComplete(commandSourceStack.getSender(), this.getName(), args);
+    }
+
+    @Override
     public boolean canUse(final @NotNull CommandSender sender) {
         return sender instanceof Player;
+    }
+
+    @Override
+    public @NotNull List<String> tabComplete(final @NotNull CommandSender sender,
+                                             final @NotNull String alias,
+                                             final @NotNull String[] args) {
+        if (!(sender instanceof Player) || this.menu == null || this.menu.options().arguments().isEmpty()) {
+            return List.of();
+        }
+
+        final List<String> argumentNames = this.menu.options().arguments();
+        if (args.length == 0 || args.length > argumentNames.size()) {
+            return List.of();
+        }
+
+        final String argumentName = argumentNames.get(args.length - 1);
+        final String typedValue = args[args.length - 1].toLowerCase(Locale.ROOT);
+
+        final List<String> completions = new ArrayList<>();
+        if (argumentName.toLowerCase(Locale.ROOT).contains("player")) {
+            Bukkit.getOnlinePlayers().stream()
+                    .map(Player::getName)
+                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(typedValue))
+                    .forEach(completions::add);
+        }
+
+        return completions;
     }
 
     public void register() {
@@ -223,7 +259,26 @@ public class RegistrableMenuCommand extends Command implements BasicCommand {
         commandUpdateQueued = true;
         this.plugin.getScheduler().runTask(() -> {
             commandUpdateQueued = false;
+            this.syncServerCommands();
             Bukkit.getOnlinePlayers().forEach(Player::updateCommands);
         });
+    }
+
+    private void syncServerCommands() {
+        try {
+            Bukkit.getServer().getClass().getMethod("syncCommands").invoke(Bukkit.getServer());
+        } catch (final NoSuchMethodException exception) {
+            plugin.debug(
+                    DebugLevel.HIGHEST,
+                    Level.WARNING,
+                    "Could not sync commands after registering menu command " + this.getName()
+                            + ": server implementation does not expose syncCommands()."
+            );
+        } catch (final IllegalAccessException | InvocationTargetException exception) {
+            plugin.printStacktrace(
+                    "Something went wrong while trying to sync commands after registering menu command: " + this.getName(),
+                    exception
+            );
+        }
     }
 }
